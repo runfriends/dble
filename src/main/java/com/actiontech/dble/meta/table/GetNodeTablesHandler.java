@@ -12,7 +12,6 @@ import com.actiontech.dble.alarm.AlertUtil;
 import com.actiontech.dble.alarm.ToResolveContainer;
 import com.actiontech.dble.backend.datasource.PhysicalDBNode;
 import com.actiontech.dble.backend.datasource.PhysicalDatasource;
-import com.actiontech.dble.config.model.SchemaConfig;
 import com.actiontech.dble.sqlengine.MultiRowSQLQueryResultHandler;
 import com.actiontech.dble.sqlengine.SQLJob;
 import com.actiontech.dble.sqlengine.SQLQueryResult;
@@ -20,31 +19,26 @@ import com.actiontech.dble.sqlengine.SQLQueryResultListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-public class SchemaDefaultNodeTablesHandler {
-    protected static final Logger LOGGER = LoggerFactory.getLogger(AbstractTableMetaHandler.class);
-    private static final String SQL = "show tables ";
-    private SchemaConfig config;
-    private String dataNode;
-    private MultiTableMetaHandler multiTableMetaHandler;
-    private volatile List<String> tables = new ArrayList<>();
+public abstract class GetNodeTablesHandler {
+
+    protected static final Logger LOGGER = LoggerFactory.getLogger(GetNodeTablesHandler.class);
+    protected static final String SQL = "show full tables where Table_type ='BASE TABLE' ";
+    protected String dataNode;
     private volatile boolean finished = false;
 
-    public List<String> getTables() {
-        return tables;
+    GetNodeTablesHandler(String dataNode) {
+        this.dataNode = dataNode;
     }
+
+    protected abstract void handleTables(String table);
+
+    protected abstract void handleFinished();
 
     public boolean isFinished() {
         return finished;
-    }
-
-    SchemaDefaultNodeTablesHandler(MultiTableMetaHandler multiTableMetaHandler, SchemaConfig config) {
-        this.multiTableMetaHandler = multiTableMetaHandler;
-        this.config = config;
-        this.dataNode = config.getDataNode();
     }
 
     public void execute() {
@@ -62,7 +56,6 @@ public class SchemaDefaultNodeTablesHandler {
             sqlJob.run();
         }
     }
-
 
     private class MySQLShowTablesListener implements SQLQueryResultListener<SQLQueryResult<List<Map<String, String>>>> {
         private String mysqlShowTableCol;
@@ -93,7 +86,7 @@ public class SchemaDefaultNodeTablesHandler {
                     ToResolveContainer.DATA_NODE_LACK.add(key);
                 }
                 finished = true;
-                multiTableMetaHandler.showTablesFinished();
+                handleFinished();
                 return;
             }
             if (ds != null && ToResolveContainer.DATA_NODE_LACK.contains(key)) {
@@ -109,12 +102,10 @@ public class SchemaDefaultNodeTablesHandler {
                 if (DbleServer.getInstance().getSystemVariables().isLowerCaseTableNames()) {
                     table = table.toLowerCase();
                 }
-                if (!config.getTables().containsKey(table)) {
-                    tables.add(table);
-                }
+                handleTables(table);
             }
             finished = true;
-            multiTableMetaHandler.showTablesFinished();
+            handleFinished();
         }
     }
 }

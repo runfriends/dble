@@ -102,6 +102,8 @@ public class NonBlockingSession implements Session {
     private AtomicInteger packetId = new AtomicInteger(0);
     private volatile boolean traceEnable = false;
     private volatile TraceResult traceResult = new TraceResult();
+    private volatile RouteResultset complexRrs = null;
+
     public NonBlockingSession(ServerConnection source) {
         this.source = source;
         this.target = new ConcurrentHashMap<>(2, 1f);
@@ -304,6 +306,7 @@ public class NonBlockingSession implements Session {
             traceResult.setAdtCommitBegin(new TraceRecord(System.nanoTime()));
         }
     }
+
     public void setFinishedCommitTime() {
         if (traceEnable || SlowQueryLog.getInstance().isEnableSlowLog()) {
             traceResult.setAdtCommitEnd(new TraceRecord(System.nanoTime()));
@@ -392,6 +395,7 @@ public class NonBlockingSession implements Session {
         if (nodes == null || nodes.length == 0 || nodes[0].getName() == null || nodes[0].getName().equals("")) {
             if (rrs.isNeedOptimizer()) {
                 try {
+                    this.complexRrs = rrs;
                     executeMultiSelect(rrs);
                 } catch (MySQLOutPutException e) {
                     source.writeErrMessage(e.getSqlState(), e.getMessage(), e.getErrorCode());
@@ -919,11 +923,15 @@ public class NonBlockingSession implements Session {
     }
 
     public void handleSpecial(RouteResultset rrs, String schema, boolean isSuccess) {
-        handleSpecial(rrs, schema, isSuccess, null);
+        if (rrs.getSchema() != null) {
+            handleSpecial(rrs, schema, isSuccess, null);
+        } else {
+            LOGGER.info("Hint ddl do not update the meta");
+        }
     }
 
     public void handleSpecial(RouteResultset rrs, String schema, boolean isSuccess, String errInfo) {
-        if (rrs.getSqlType() == ServerParse.DDL) {
+        if (rrs.getSqlType() == ServerParse.DDL && rrs.getSchema() != null) {
             String sql = rrs.getSrcStatement();
             if (source.isTxStart()) {
                 source.setTxStart(false);
@@ -940,7 +948,6 @@ public class NonBlockingSession implements Session {
 
     /**
      * backend packet server_status change and next round start
-     *
      */
     public void multiStatementPacket(MySQLPacket packet, byte packetNum) {
         if (this.isMultiStatement.get()) {
@@ -955,7 +962,6 @@ public class NonBlockingSession implements Session {
 
     /**
      * backend row eof packet server_status change and next round start
-     *
      */
     public void multiStatementPacket(byte[] eof, byte packetNum) {
         if (this.getIsMultiStatement().get()) {
@@ -1045,8 +1051,6 @@ public class NonBlockingSession implements Session {
     }
 
 
-
-
     public boolean isTrace() {
         return traceEnable;
     }
@@ -1059,6 +1063,10 @@ public class NonBlockingSession implements Session {
         if (traceEnable || SlowQueryLog.getInstance().isEnableSlowLog()) {
             traceResult.setSimpleHandler(simpleHandler);
         }
+    }
+
+    public RouteResultset getComplexRrs() {
+        return complexRrs;
     }
 
 }

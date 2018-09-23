@@ -6,6 +6,7 @@
 package com.actiontech.dble.server.handler;
 
 import com.actiontech.dble.DbleServer;
+import com.actiontech.dble.backend.mysql.CharsetUtil;
 import com.actiontech.dble.cache.LayerCachePool;
 import com.actiontech.dble.config.ErrorCode;
 import com.actiontech.dble.config.model.SchemaConfig;
@@ -24,6 +25,7 @@ import com.actiontech.dble.server.ServerConnection;
 import com.actiontech.dble.server.parser.ServerParse;
 import com.actiontech.dble.sqlengine.mpp.LoadData;
 import com.actiontech.dble.util.ObjectUtil;
+import com.actiontech.dble.util.SqlStringUtil;
 import com.actiontech.dble.util.StringUtil;
 import com.alibaba.druid.sql.ast.SQLExpr;
 import com.alibaba.druid.sql.ast.expr.SQLCharExpr;
@@ -117,7 +119,7 @@ public final class ServerLoadDataInfileHandler implements LoadDataInfileHandler 
         String escaped = escapedExpr == null ? "\\" : escapedExpr.getText();
         loadData.setEscape(escaped);
         String charset = statement.getCharset() != null ? statement.getCharset() : DbleServer.getInstance().getSystemVariables().getDefaultValue("character_set_database");
-        loadData.setCharset(charset);
+        loadData.setCharset(CharsetUtil.getJavaCharset(charset));
         loadData.setFileName(fileName);
     }
 
@@ -421,7 +423,7 @@ public final class ServerLoadDataInfileHandler implements LoadDataInfileHandler 
         SQLLiteralExpr fn = new SQLCharExpr(fileName);    //druid will filter path, reset it now
         statement.setFileName(fn);
         //replace IGNORE X LINES in SQL to avoid  IGNORING X LINE in every node.
-        String srcStatement = this.ignoreLinesDelete(statement.toString());
+        String srcStatement = this.ignoreLinesDelete(SqlStringUtil.toSQLString(statement));
         RouteResultset rrs = new RouteResultset(srcStatement, ServerParse.LOAD_DATA_INFILE_SQL);
         rrs.setLoadData(true);
         rrs.setStatement(srcStatement);
@@ -806,5 +808,6 @@ public final class ServerLoadDataInfileHandler implements LoadDataInfileHandler 
         }
         fileDirToDel.delete();
     }
+
 
 }
